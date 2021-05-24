@@ -193,10 +193,54 @@ void ViewerWidget::usecka_DDA(QPointF A, QPointF B, QColor color, int z) {
 }
 
 void ViewerWidget::kresliPriamku(QVector<QPointF> body, QColor color, int z) {
-	QPointF A, B;
+	QVector<QPointF> A;
 	//najdeme priesecniky s okrajmi platna
-	//vykreslime usecku medzi tymi bodmi
-	usecka_DDA(A, B, color, z);
+	QVector<QPointF> rohy;
+	QPointF d, E;
+	int i = 0;
+	E.setX(0);
+	E.setY(0);
+	rohy.push_back(E);
+	E.setX(img->width() - 1);
+	E.setY(0);
+	rohy.push_back(E);
+	E.setX(img->width() - 1);
+	E.setY(img->height() - 1);
+	rohy.push_back(E);
+	E.setX(0);
+	E.setY(img->height() - 1);
+	rohy.push_back(E);
+	d.setX(body[1].x() - body[0].x());
+	d.setY(body[1].y() - body[0].y());
+
+	QPoint priesecnik;
+	int x, y;
+	int x1 = body[0].x(), y1 = body[0].y(), x2 = body[1].x(), y2 = body[1].y(), x3, x4, y3, y4;
+	for (i = 0; i < rohy.size(); i++) {
+		x3 = rohy[i].x();
+		y3 = rohy[i].y();
+		x4 = rohy[(i + 1) % 4].x();
+		y4 = rohy[(i + 1) % 4].y();
+		float d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+		float pre = (x1 * y2 - y1 * x2), post = (x3 * y4 - y3 * x4);
+		float x = (pre * (x3 - x4) - (x1 - x2) * post) / d;
+		float y = (pre * (y3 - y4) - (y1 - y2) * post) / d;
+		priesecnik.setX(x);			//priesecnik priamok
+		priesecnik.setY(y);
+		if (priesecnik.x() >= 0 && priesecnik.x() < img->width() && priesecnik.y() >= 0 && priesecnik.y() < img->height()) {
+			A.append(priesecnik);
+		}
+	}
+	if (A.size() == 2) {
+		usecka_DDA(A[0], A[1], color, z);
+		A.clear();	A.squeeze();
+	}
+	else {
+		QMessageBox msgBox;
+		msgBox.setText(u8"Nepodarilo sa najst 2 priesecniky.");
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+	}
 }
 
 void ViewerWidget::kresliKruznicu(QVector<QPointF> body, QColor color, int z) {
@@ -550,8 +594,8 @@ void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
 		}
 	}
 
-	for (int i = 0; i < hrany.size(); i++) {						//zoradi hrany podla y
-		for (int j = 0; j < hrany.size() - i - 1; j++) {
+	for ( i = 0; i < hrany.size(); i++) {						//zoradi hrany podla y
+		for ( j = 0; j < hrany.size() - i - 1; j++) {
 			if (hrany[j + 1] < hrany[j]) {
 				edge temp = hrany[j];
 				hrany[j] = hrany[j + 1];
@@ -560,10 +604,10 @@ void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
 		}
 	}
 
-	int Ymin = hrany[0].ys, Ymax = 0;								//nastavi Ymax, Ymin
+	int Ymin = round(hrany[0].ys), Ymax = 0;								//nastavi Ymax, Ymin
 	for (i = 0; i < hrany.size(); i++) {
 		if (hrany[i].yk > Ymax)
-			Ymax = hrany[i].yk;
+			Ymax = round(hrany[i].yk);
 	}
 
 	QVector<QList<edge>> TH;									//vytvori tabulku hran
@@ -587,8 +631,8 @@ void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
 			}
 		}
 
-		for (int i = 0; i < ZAH.size(); i++) {										//zoradi hrany podla x
-			for (int j = 0; j < ZAH.size() - i - 1; j++) {
+		for ( i = 0; i < ZAH.size(); i++) {										//zoradi hrany podla x
+			for ( j = 0; j < ZAH.size() - i - 1; j++) {
 				if (ZAH[j + 1].xs < ZAH[j].xs) {
 					edge TempHrana = ZAH[j];
 					ZAH[j] = ZAH[j + 1];
@@ -598,10 +642,9 @@ void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
 		}
 
 		for (j = 0; j < ZAH.size(); j += 2) {										//vykreslovanie
-			if ((int)ZAH[j].xs != (int)ZAH[j + 1].xs) {
-				for (k = 2; k < (int)ZAH[j + 1].xs - (int)ZAH[j].xs; k++) {
-					//setPixel((int)ZAH[j].xs + k, y, vypln);
-					setZbuff((int)ZAH[j].xs + k, y, vypln, z);
+			if (round(ZAH[j].xs) != round(ZAH[j + 1].xs)) {
+				for (k = 0; k < round(ZAH[j + 1].xs) - round(ZAH[j].xs); k++) {
+					setZbuff(round(ZAH[j].xs + k), y, vypln, z);
 				}
 			}
 		}
