@@ -87,6 +87,7 @@ private slots:
 	void on_kresli_clicked();
 	void on_imp_clicked();
 	void on_exp_clicked();
+	void on_save_clicked();
 
 	/*
 	void on_Clear_clicked();

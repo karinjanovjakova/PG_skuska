@@ -115,7 +115,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 		else if (ui->mode->currentIndex() == 3) {			//kruznica
 			if (pts.size() == 1) {
 				pts.append(e->pos());
-				objekty.push_back(new objekt(3, objekty.size(), pts, Qt::black));
+				objekty.push_back(new objektF(3, objekty.size(), pts, Qt::black, Qt::white, true));
 				getCurrentViewerWidget()->kresliObjekty(objekty);
 				aktualny = objekty[objekty.size() - 1];
 				pts.clear();	pts.squeeze();
@@ -317,6 +317,36 @@ void ImageViewer::on_actionOpen_triggered()
 		msgBox.exec();
 	}
 }
+
+void ImageViewer::on_save_clicked() {
+	if (!isImgOpened()) {
+		msgBox.setText("No image to save.");
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+		return;
+	}
+	QString folder = settings.value("folder_img_save_path", "").toString();
+
+	ViewerWidget* w = getCurrentViewerWidget();
+
+	QString fileFilter = "Image data (*.bmp *.gif *.jpg *.jpeg *.png *.pbm *.pgm *.ppm .*xbm .* xpm);;All files (*)";
+	QString fileName = QFileDialog::getSaveFileName(this, "Save image", folder + "/" + w->getName(), fileFilter);
+	if (fileName.isEmpty()) { return; }
+
+	QFileInfo fi(fileName);
+	settings.setValue("folder_img_save_path", fi.absoluteDir().absolutePath());
+
+	if (!saveImage(fileName)) {
+		msgBox.setText("Unable to save image.");
+		msgBox.setIcon(QMessageBox::Warning);
+		msgBox.exec();
+	}
+	else {
+		msgBox.setText(QString("File %1 saved.").arg(fileName));
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+	}
+}
 void ImageViewer::on_actionSave_as_triggered()
 {
 	if (!isImgOpened()) {
@@ -391,7 +421,7 @@ void ImageViewer::on_fill_clicked() {
 		msgBox.exec();
 		return;
 	}
-	if (aktualny->getTyp() == 2 || aktualny->getTyp() == 1) {
+	if (aktualny->getTyp() == 2 || aktualny->getTyp() == 1 || aktualny->getTyp() == 3) {
 		QColor Color = QColorDialog::getColor(Qt::white, this, "Select fill color");
 		if (Color.isValid()) {
 			vypln = Color;
@@ -429,34 +459,36 @@ void ImageViewer::calcRot() {
 		msgBox.exec();
 		return;
 	}
-	QVector<QPointF> poly = aktualny->getBody();
-	double uhol = ui->rot_spin->value() / 180.0 * M_PI;
-	double sX = poly[0].x(), sY = poly[0].y(), i = 0, x ,y;
-	
-	if (ui->rot_spin->value() < 0)
-	{
-		for (int i = 1; i < poly.size(); i++)
-		{
-			x = poly[i].x();
-			y = poly[i].y();
+	if (aktualny->getTyp() != 3) {
+		QVector<QPointF> poly = aktualny->getBody();
+		double uhol = ui->rot_spin->value() / 180.0 * M_PI;
+		double sX = poly[0].x(), sY = poly[0].y(), i = 0, x, y;
 
-			poly[i].setX(((x - sX) * qCos(uhol) + (y - sY) * qSin(uhol) + sX));
-			poly[i].setY(-(x - sX) * qSin(uhol) + (y - sY) * qCos(uhol) + sY);
-		}
-	}
-	else if (ui->rot_spin->value() > 0)
-	{
-		uhol = 2 * M_PI - uhol;
-		for (int i = 1; i < poly.size(); i++)
+		if (ui->rot_spin->value() < 0)
 		{
-			x = poly[i].x();
-			y = poly[i].y();
+			for (int i = 1; i < poly.size(); i++)
+			{
+				x = poly[i].x();
+				y = poly[i].y();
 
-			poly[i].setX((x - sX) * qCos(uhol) - (y - sY) * qSin(uhol) + sX);
-			poly[i].setY((x - sX) * qSin(uhol ) + (y - sY) * qCos(uhol ) + sY);
+				poly[i].setX(((x - sX) * qCos(uhol) + (y - sY) * qSin(uhol) + sX));
+				poly[i].setY(-(x - sX) * qSin(uhol) + (y - sY) * qCos(uhol) + sY);
+			}
 		}
+		else if (ui->rot_spin->value() > 0)
+		{
+			uhol = 2 * M_PI - uhol;
+			for (int i = 1; i < poly.size(); i++)
+			{
+				x = poly[i].x();
+				y = poly[i].y();
+
+				poly[i].setX((x - sX) * qCos(uhol) - (y - sY) * qSin(uhol) + sX);
+				poly[i].setY((x - sX) * qSin(uhol) + (y - sY) * qCos(uhol) + sY);
+			}
+		}
+		aktualny->setBody(poly);
 	}
-	aktualny->setBody(poly);
 }
 
 void ImageViewer::calcSca() {
@@ -499,6 +531,10 @@ void ImageViewer::on_comboBox_currentIndexChanged(int i) {
 		ui->sca_spin->setValue(1);
 		ui->transX->setValue(0);
 		ui->transY->setValue(0);
+		if (aktualny->getVyplnaj())
+			ui->filled->setChecked(true);
+		else if(!aktualny->getVyplnaj())
+			ui->filled->setChecked(false);
 	}
 }
 
@@ -507,31 +543,34 @@ void ImageViewer::on_mode_currentIndexChanged(int i) {
 }
 
 void ImageViewer::swapper(int i) {				//swapne smerom dole
-	if (objekty.size() <= i || objekty.size()<2 || i==0) {
-		msgBox.setText(u8"Minnimálny poèet bodov je 2. Zadajte ïalšie body.");
+	if (objekty.size() <= i || objekty.size() < 2 || i == 0) {
+		msgBox.setText(u8"Nie je možné posunú na požadovanú úroveò.");
 		msgBox.setIcon(QMessageBox::Information);
 		msgBox.exec();
 		return;
 	}
-	else {
-		objekt* temp = objekty[i];
-		objekty[i] = objekty[i - 1];
-		objekty[i - 1] = temp;
-		objekty[i]->setZ(objekty[i]->getZ() + 1);
-		objekty[i-1]->setZ(objekty[i]->getZ() - 1);
-	}
+	objekt* temp = objekty[i];
+	objekty[i] = objekty[i - 1];
+	objekty[i - 1] = temp;
+	objekty[i]->setZ(objekty[i]->getZ() + 1);
+	objekty[i - 1]->setZ(objekty[i]->getZ() - 1);
+
 }
 
 void ImageViewer::on_up_clicked() {
 	int i = ui->comboBox->currentIndex() + 1;
 	swapper(i);
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty); 
+	if (objekty.size() > i && objekty.size() >= 2 && i != 0)
+		ui->comboBox->setCurrentIndex(i);
 }
 
 void ImageViewer::on_down_clicked() {
 	int i = ui->comboBox->currentIndex();
 	swapper(i);
 	getCurrentViewerWidget()->kresliObjekty(objekty);
+	if (objekty.size() > i && objekty.size() >= 2 && i != 0)
+		ui->comboBox->setCurrentIndex(i-1);
 }
 
 void ImageViewer::on_filled_stateChanged(int i) {
@@ -541,8 +580,9 @@ void ImageViewer::on_filled_stateChanged(int i) {
 
 
 void ImageViewer::on_imp_clicked() {
-	ui->comboBox->clear();
+	getCurrentViewerWidget()->clear();
 	objekty.clear();
+	ui->comboBox->clear();
 	int typ, pts;
 	QPointF A;
 	QVector<QPointF> body;
@@ -569,6 +609,13 @@ void ImageViewer::on_imp_clicked() {
 	int obj = line.toInt(); //pocet objektov
 	for (int i = 0; i < obj; i++) {
 		line = file.readLine();
+		if (line != "#objekt\r\n") {
+			msgBox.setText(u8"Súbor nie je správny.");
+			msgBox.setIcon(QMessageBox::Warning);
+			msgBox.exec();
+			return;
+		}
+		line = file.readLine();
 		typ=line.toInt();
 		line = file.readLine();
 		pts = line.toInt();
@@ -578,26 +625,23 @@ void ImageViewer::on_imp_clicked() {
 			body.append(A);
 		}
 		line = file.readLine();		//farba
-		col.setRed(line.split(" ").at(0).toInt()); col.setGreen(line.split(" ").at(0).toInt()); col.setBlue(line.split(" ").at(0).toInt());
+		col.setRed(line.split(" ").at(0).toInt()); col.setGreen(line.split(" ").at(1).toInt()); col.setBlue(line.split(" ").at(2).toInt());
 		line = file.readLine();		//fill
-		fill.setRed(line.split(" ").at(0).toInt()); fill.setGreen(line.split(" ").at(0).toInt()); fill.setBlue(line.split(" ").at(0).toInt());
+		fill.setRed(line.split(" ").at(0).toInt()); fill.setGreen(line.split(" ").at(1).toInt()); fill.setBlue(line.split(" ").at(2).toInt());
 		line = file.readLine();		//vyplnaj
-		if (typ == 0 || typ == 3 || typ == 4) {
+		if (typ == 0 || typ == 4) {
 			objekty.push_back(new objekt(typ, i, body, col));
 		}
-		else if (typ == 1 || typ == 2) {
-			if (typ == 1) {
-
-			}
+		else if (typ == 1 || typ == 2 || typ ==  3) {
 			if (line.toInt() == 0) {
 				objekty.push_back(new objektF(typ, i, body, col, fill, false));
 			}
 			else
 				objekty.push_back(new objektF(typ, i, body, col, fill, true));
 		}
-		QString str = "vrstva " + QString::number(i);
+		QString str = "vrstva " + QString::number(i+1);
 		ui->comboBox->addItem(str);
-		qDebug() << body.size();
+		//qDebug() << body.size();
 		body.clear(); body.squeeze();
 	}
 	getCurrentViewerWidget()->kresliObjekty(objekty);
@@ -610,13 +654,24 @@ void ImageViewer::on_exp_clicked() {
 		msgBox.exec();
 		return;
 	}
+
+	QString folder = settings.value("folder_data_save_path", "").toString();
+
+	ViewerWidget* w = getCurrentViewerWidget();
+
+	QString fileFilter = "Image data (*.txt );;All files (*)";
+	QString fileName = QFileDialog::getSaveFileName(this, "Save data", folder + "/" + w->getName(), fileFilter);
+	if (fileName.isEmpty()) { return; }
+
+
 	int i,j; 
-	QFile file("out2.vtk");
+	QFile file(fileName);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
 		return;
 	QTextStream out(&file);
 	out << "#pocet objektov\n" << objekty.size() << "\n";
 	for (i = 0; i < objekty.size(); i++) {
+		out << "#objekt\n";
 		out << objekty[i]->getTyp() << "\n";
 		out << objekty[i]->getBody().size() << "\n";
 		for (j = 0; j < objekty[i]->getBody().size(); j++) {
@@ -630,6 +685,9 @@ void ImageViewer::on_exp_clicked() {
 			out << 1 << "\n";
 
 	}
+	msgBox.setText(u8"Export bol úspešný");
+	msgBox.setIcon(QMessageBox::Information);
+	msgBox.exec();
 }
 
 

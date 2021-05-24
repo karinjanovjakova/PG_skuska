@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>1321</width>
-    <height>647</height>
+    <height>1151</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -77,6 +77,13 @@
         <widget class="QPushButton" name="exp">
          <property name="text">
           <string>Export</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="save">
+         <property name="text">
+          <string>Save</string>
          </property>
         </widget>
        </item>
@@ -200,6 +207,18 @@
           </item>
           <item>
            <widget class="QGroupBox" name="groupBox_3">
+            <property name="minimumSize">
+             <size>
+              <width>500</width>
+              <height>500</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>500</width>
+              <height>500</height>
+             </size>
+            </property>
             <property name="title">
              <string>Translácia</string>
             </property>
@@ -272,7 +291,7 @@
                 <number>1</number>
                </property>
                <property name="minimum">
-                <double>-10.000000000000000</double>
+                <double>0.100000000000000</double>
                </property>
                <property name="maximum">
                 <double>10.000000000000000</double>

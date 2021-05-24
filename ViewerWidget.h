@@ -33,6 +33,7 @@ public:
 	void usecka_DDA(QPointF A, QPointF B, QColor color, int z);
 	void kresliPriamku(QVector<QPointF> body, QColor color, int z);
 	void kresliKruznicu(QVector<QPointF> body, QColor color, int z);
+	void kresliKruznicuF(QVector<QPointF> body, QColor color, QColor vypln, bool vyplnaj, int z);
 	void kresliPolygon(QVector<QPointF> body, QColor color, QColor vypln, bool vyplnaj, int z);
 	void kresliKrivku(QVector <QPointF> body, QColor color, int z);
 	void scanLine(QVector <QPointF> body, QColor color, int z); 
