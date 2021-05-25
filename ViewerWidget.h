@@ -27,9 +27,8 @@ public:
 	bool setImage(const QImage& inputImg);
 	QImage* getImage() { return img; };
 	bool isEmpty();
-	void kresliObjekty(QVector<objekt*> vsetko);
+	void kresliObjekty(QVector<objekt*> vsetko, QColor poz);
 	void kresliObjekt(objekt* Objekt);
-	//int typ, QVector<QPointF> body, QColor fill, QColor color, bool vyplnaj, int z
 	void usecka_DDA(QPointF A, QPointF B, QColor color, int z);
 	void kresliPriamku(QVector<QPointF> body, QColor color, int z);
 	void kresliKruznicu(QVector<QPointF> body, QColor color, int z);
@@ -37,9 +36,9 @@ public:
 	void kresliPolygon(QVector<QPointF> body, QColor color, QColor vypln, bool vyplnaj, int z);
 	void kresliKrivku(QVector <QPointF> body, QColor color, int z);
 	void scanLine(QVector <QPointF> body, QColor color, int z); 
-	void scanLineTri(QVector <QPointF> body, QColor farba, double z);
+	void scanLineTri(QVector <QPointF> body, QColor farba, int z);
 	QVector<QVector<zBuff>> buffer;
-	void resetZbuff();
+	void resetZbuff(QColor pozadie);
 	void setZbuff(int x, int y, QColor farba, double z);
 	void kresliZbuff();
 

@@ -88,9 +88,9 @@ void ViewerWidget::paintEvent(QPaintEvent* event)
 
 //kresliace a vyfarbovacie funkcie
 
-void ViewerWidget::kresliObjekty(QVector<objekt*> vsetko) {
+void ViewerWidget::kresliObjekty(QVector<objekt*> vsetko, QColor poz) {
 	int i;
-	resetZbuff();
+	resetZbuff(poz);
 	for (i = 0; i < vsetko.size(); i++) {
 		kresliObjekt(vsetko[i]);
 	}
@@ -243,6 +243,65 @@ void ViewerWidget::kresliPriamku(QVector<QPointF> body, QColor color, int z) {
 	}
 }
 
+void ViewerWidget::kresliPolygon(QVector<QPointF> body, QColor color, QColor vypln, bool vyplnaj, int z) {
+	//polygon s orezanim
+	QVector<QPointF> W, V;
+	V = body;
+	if (V.size() > 2) {
+		QPointF S, P, A, B;
+		int Xmin[4] = { 0, 0, -img->width() + 1, -img->height() + 1 };
+		int xmin = 0, j = 0, i = 0;
+		for (j = 0; j < 4; j++) {
+			xmin = Xmin[j];
+			if (V.size() > 0)
+				S = V[V.size() - 1];
+			for (i = 0; i < V.size(); i++) {
+				if (V[i].x() >= xmin) {
+					if (S.x() >= xmin) {
+						W.push_back(V[i]);
+					}
+					else {
+						P.setX(xmin);
+						P.setY(S.y() + (xmin - S.x()) * (V[i].y() - S.y()) / (V[i].x() - S.x()));
+						W.push_back(P);
+						W.push_back(V[i]);
+					}
+				}
+				else {
+					if (S.x() >= xmin) {
+						P.setX(xmin);
+						P.setY(S.y() + (xmin - S.x()) * (V[i].y() - S.y()) / (V[i].x() - S.x()));
+						W.push_back(P);
+					}
+				}
+				S = V[i];
+			}
+			V.clear();	V.squeeze();
+			for (i = 0; i < W.size(); i++) {
+				P.setX(W[i].y());
+				P.setY(-W[i].x());
+				V.push_back(P);
+			}
+			W.clear();	W.squeeze();
+		}
+		for (i = 0; i < V.size(); i++) {
+			A.setX(V[i].x());
+			A.setY(V[i].y());
+			B.setX(V[(i + 1) % (V.size())].x());
+			B.setY(V[(i + 1) % (V.size())].y());
+
+			usecka_DDA(A, B, color, z);
+		}
+		if (vyplnaj && V.size() > 3)
+			scanLine(V, vypln, z);
+		else if (vyplnaj && V.size() == 3) {
+			scanLineTri(V, vypln, z);
+		}
+
+	}
+	update();
+}
+
 void ViewerWidget::kresliKruznicu(QVector<QPointF> body, QColor color, int z) {
 	QPointF A(body[0]), B(body[1]);
 	int ax = (int)A.x(), ay = (int)A.y(), bx = (int)B.x(), by = (int)B.y();
@@ -290,105 +349,49 @@ void ViewerWidget::kresliKruznicuF(QVector<QPointF> body, QColor color, QColor v
 					setZbuff(A.x() + i, A.y() + j, vypln, z);
 			}
 		}
-		/*
-		int ax = (int)A.x(), ay = (int)A.y(), bx = (int)B.x(), by = (int)B.y();
-		A.setX(ax); A.setY(ay); B.setX(bx); B.setY(by);
-		int a = abs(A.x() - B.x()), b = abs(A.y() - B.y()), r = sqrt((a * a) + (b * b)),
-			p = 1 - r, x = 0, y = r, dvaX = 3, dvaY = 2 * r + 2;
-		do {
-			C.setX(x + A.x());	C.setY(y + A.y());
-			D.setX(-x + A.x());	D.setY(-y + A.y());
-			usecka_DDA(C, D, vypln, z);
-			C.setX(-x + A.x());	C.setY(y + A.y());
-			D.setX(x + A.x());	D.setY(-y + A.y());
-			usecka_DDA(C, D, vypln, z);
-			C.setX(-y + A.x());	C.setY(-x + A.y());
-			D.setX(y + A.x());	D.setY(x + A.y());
-			usecka_DDA(C, D, vypln, z);
-			C.setX(-y + A.x());	C.setY(x + A.y());
-			D.setX(y + A.x());	D.setY(-x + A.y());
-			usecka_DDA(C, D, vypln, z);
-			if (p > 0) {
-				p += -dvaY;
-				y--;
-				dvaY += -2;
-			}
-			p += dvaX;
-			dvaX += 2;
-			x++;
-		} while (x < y);*/
 	}
 	kresliKruznicu(body, color, z);
 
 	update();
 }
 
-void ViewerWidget::kresliPolygon(QVector<QPointF> body, QColor color, QColor vypln, bool vyplnaj, int z) {
-	//polygon s orezanim
-	QVector<QPointF> W, V;
-	V = body;
-		if (V.size() > 2) {
-			QPointF S, P, A, B;
-			int Xmin[4] = { 0, 0, -img->width()+1, -img->height()+1 };
-			int xmin = 0, j = 0, i=0;
-			for (j = 0; j < 4; j++) {
-				xmin = Xmin[j];
-				if (V.size()>0)
-					S = V[V.size() - 1];
-				for (i = 0; i < V.size(); i++) {
-					if (V[i].x() >= xmin) {
-						if (S.x() >= xmin) {
-							W.push_back(V[i]);
-						}
-						else {
-							P.setX(xmin);
-							P.setY(S.y() + (xmin - S.x()) * (V[i].y() - S.y()) / (V[i].x() - S.x()));
-							W.push_back(P);
-							W.push_back(V[i]);
-						}
-					}
-					else {
-						if (S.x() >= xmin) {
-							P.setX(xmin);
-							P.setY(S.y() + (xmin - S.x()) * (V[i].y() - S.y()) / (V[i].x() - S.x()));
-							W.push_back(P);
-						}
-					}
-					S = V[i];
-				}
-				V.clear();	V.squeeze();
-				for (i = 0; i < W.size(); i++) {
-					P.setX(W[i].y());
-					P.setY(-W[i].x());
-					V.push_back(P);
-				}
-				W.clear();	W.squeeze();
-			}
-			for (i = 0; i < V.size(); i++) {
-				A.setX(V[i].x());
-				A.setY(V[i].y());
-				B.setX(V[(i + 1) % (V.size())].x());
-				B.setY(V[(i + 1) % (V.size())].y());
+void ViewerWidget::kresliKrivku(QVector <QPointF> body, QColor color, int z) {
+	int i, j;
+	QPointF Q0, Q1;
+	float deltaT = 0.01;
+	float T = deltaT;
 
-				usecka_DDA(A, B, color, z);
+	QVector<QVector<QPointF>> P(body.size());
+	for (i = 0; i < body.size(); i++) {
+		P[i].resize(body.size() - i);
+		P[0][i] = body[i];
+	}
+	Q0.setX(body[0].x());
+	Q0.setY(body[0].y());
+	while (T < 1) {
+		for (i = 1; i < body.size(); i++) {
+			for (j = 0; j < body.size() - i; j++) {
+				P[i][j].setX((1.0 - T) * P[i - 1][j].x() + T * P[i - 1][j + 1].x());
+				P[i][j].setY((1.0 - T) * P[i - 1][j].y() + T * P[i - 1][j + 1].y());
 			}
-			//qDebug() <<"vrcholy.size()="<< V.size();
-			if (vyplnaj && V.size()>3)
-				scanLine(V, vypln, z);
-			else if (vyplnaj && V.size() == 3) {
-				scanLineTri(V, vypln, z);
-			}
-
 		}
-	update();
+		Q1.setX(P[body.size() - 1][0].x());
+		Q1.setY(P[body.size() - 1][0].y());
+
+		usecka_DDA(Q0, Q1, color, z);
+
+		Q0 = Q1;
+		T += deltaT;
+	}
+	Q1.setX(body[body.size() - 1].x());
+	Q1.setY(body[body.size() - 1].y());
+	usecka_DDA(Q0, Q1, color, z);
 }
 
-void ViewerWidget::scanLineTri(QVector <QPointF> body, QColor farba, double z) {
-	//QVector<edge> hrany (3);
-																//usporiadanie pola bodov
+void ViewerWidget::scanLineTri(QVector <QPointF> body, QColor farba, int z) {
+	//usporiadanie pola bodov
 	int i, j, k, y = 0, Ymax = 0;
 	float Xmin = 0, Xmax = 0, m;
-	//qDebug() << body;
 	for (i = 0; i < 3; i++) {
 		for (j = 0; j < 2; j++) {
 			if (body[j].y() > body[j + 1].y()) {
@@ -405,7 +408,6 @@ void ViewerWidget::scanLineTri(QVector <QPointF> body, QColor farba, double z) {
 			}
 		}
 	}
-	//qDebug() << body;
 	QVector<QPointF> e1(2), e2(2);								//vytvorenie "podtrojuholnikov"
 	float w1, w2;
 	bool ibajeden = false;
@@ -484,7 +486,6 @@ void ViewerWidget::scanLineTri(QVector <QPointF> body, QColor farba, double z) {
 
 			y = e1[0].y();
 			Ymax = e1[1].y();
-			//qDebug() << "pre dolny " << Xmin << Xmax;
 		}
 
 		else {
@@ -564,39 +565,6 @@ void ViewerWidget::scanLineTri(QVector <QPointF> body, QColor farba, double z) {
 			dx = Xmax - Xmin;
 		}
 	}
-}
-
-void ViewerWidget::kresliKrivku(QVector <QPointF> body, QColor color, int z) {
-	int i, j;
-	QPointF Q0, Q1;
-	float deltaT = 0.01;
-	float T = deltaT;
-
-	QVector<QVector<QPointF>> P(body.size());
-	for (i = 0; i < body.size(); i++) {
-		P[i].resize(body.size() - i);
-		P[0][i] = body[i];
-	}
-	Q0.setX(body[0].x());
-	Q0.setY(body[0].y());
-	while (T < 1) {
-		for (i = 1; i < body.size(); i++) {
-			for (j = 0; j < body.size() - i; j++) {
-				P[i][j].setX((1.0 - T) * P[i - 1][j].x() + T * P[i - 1][j + 1].x());
-				P[i][j].setY((1.0 - T) * P[i - 1][j].y() + T * P[i - 1][j + 1].y());
-			}
-		}
-		Q1.setX(P[body.size() - 1][0].x());
-		Q1.setY(P[body.size() - 1][0].y());
-
-		usecka_DDA(Q0, Q1, color, z);
-
-		Q0 = Q1;
-		T += deltaT;
-	}
-	Q1.setX(body[body.size() - 1].x());
-	Q1.setY(body[body.size() - 1].y());
-	usecka_DDA(Q0, Q1, color, z);
 }
 
 void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
@@ -710,7 +678,7 @@ void ViewerWidget::scanLine(QVector<QPointF> body, QColor vypln, int z) {
 	}
 }
 
-void ViewerWidget::resetZbuff() {
+void ViewerWidget::resetZbuff(QColor pozadie) {
 	int i, j;
 	buffer.resize(500);
 	for (i = 0; i < 500; i++)
@@ -718,9 +686,9 @@ void ViewerWidget::resetZbuff() {
 
 	for (i = 0; i < buffer.size(); i++) {
 		for (j = 0; j < buffer[i].size(); j++) {
-			buffer[i][j].farbaPixelu.setRed(255);
-			buffer[i][j].farbaPixelu.setGreen(255);
-			buffer[i][j].farbaPixelu.setBlue(255);
+			buffer[i][j].farbaPixelu.setRed(pozadie.red());
+			buffer[i][j].farbaPixelu.setGreen(pozadie.green());
+			buffer[i][j].farbaPixelu.setBlue(pozadie.blue());
 			//buf[i][j].z = INTMAX_MIN;
 			buffer[i][j].z = -74237489;
 		}

@@ -308,6 +308,13 @@
                </property>
               </widget>
              </item>
+             <item row="3" column="1">
+              <widget class="QPushButton" name="Clear">
+               <property name="text">
+                <string>Vymaž</string>
+               </property>
+              </widget>
+             </item>
             </layout>
            </widget>
           </item>

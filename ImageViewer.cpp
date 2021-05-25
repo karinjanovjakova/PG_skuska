@@ -63,6 +63,7 @@ bool ImageViewer::ViewerWidgetEventFilter(QObject* obj, QEvent* event)
 
 	return QObject::eventFilter(obj, event);
 }
+
 void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 {
 	QMouseEvent* e = static_cast<QMouseEvent*>(event);
@@ -71,7 +72,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			if (pts.size() == 1) {
 				pts.append(e->pos());
 				objekty.push_back(new objekt(0, objekty.size(), pts, Qt::black));
-				getCurrentViewerWidget()->kresliObjekty(objekty);
+				getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 				aktualny = objekty[objekty.size()-1];
 				pts.clear();	pts.squeeze();
 				QString str = "vrstva " + QString::number(objekty.size());
@@ -93,7 +94,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 				objekty.push_back(new objektF(1, objekty.size(), pts, Qt::black, Qt::white, true));
 				objekty[objekty.size() - 1]->dopocitaj();
 				pts = objekty[objekty.size() - 1]->getBody();
-				getCurrentViewerWidget()->kresliObjekty(objekty);
+				getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 				aktualny = objekty[objekty.size() - 1];
 				pts.clear();	pts.squeeze();
 				QString str = "vrstva " + QString::number(objekty.size());
@@ -116,7 +117,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			if (pts.size() == 1) {
 				pts.append(e->pos());
 				objekty.push_back(new objektF(3, objekty.size(), pts, Qt::black, Qt::white, true));
-				getCurrentViewerWidget()->kresliObjekty(objekty);
+				getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 				aktualny = objekty[objekty.size() - 1];
 				pts.clear();	pts.squeeze();
 				QString str = "vrstva " + QString::number(objekty.size());
@@ -141,7 +142,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 			if (pts.size() >= 3) {
 				//pts.append(pts[0]);
 				objekty.push_back(new objektF(2, objekty.size(), pts, Qt::black, Qt::white, true));
-				getCurrentViewerWidget()->kresliObjekty(objekty);
+				getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 				aktualny = objekty[objekty.size() - 1];
 				pts.clear();	pts.squeeze();
 				QString str = "vrstva " + QString::number(objekty.size());
@@ -152,7 +153,7 @@ void ImageViewer::ViewerWidgetMouseButtonPress(ViewerWidget* w, QEvent* event)
 		if (ui->mode->currentIndex() == 4) {				//vykreslenie bezierovej krivky
 			if (pts.size() >= 2) {
 				objekty.push_back(new objekt(4, objekty.size(), pts, Qt::black));
-				getCurrentViewerWidget()->kresliObjekty(objekty);
+				getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 				aktualny = objekty[objekty.size() - 1];
 				pts.clear();	pts.squeeze();
 				QString str = "vrstva " + QString::number(objekty.size());
@@ -318,35 +319,6 @@ void ImageViewer::on_actionOpen_triggered()
 	}
 }
 
-void ImageViewer::on_save_clicked() {
-	if (!isImgOpened()) {
-		msgBox.setText("No image to save.");
-		msgBox.setIcon(QMessageBox::Information);
-		msgBox.exec();
-		return;
-	}
-	QString folder = settings.value("folder_img_save_path", "").toString();
-
-	ViewerWidget* w = getCurrentViewerWidget();
-
-	QString fileFilter = "Image data (*.bmp *.gif *.jpg *.jpeg *.png *.pbm *.pgm *.ppm .*xbm .* xpm);;All files (*)";
-	QString fileName = QFileDialog::getSaveFileName(this, "Save image", folder + "/" + w->getName(), fileFilter);
-	if (fileName.isEmpty()) { return; }
-
-	QFileInfo fi(fileName);
-	settings.setValue("folder_img_save_path", fi.absoluteDir().absolutePath());
-
-	if (!saveImage(fileName)) {
-		msgBox.setText("Unable to save image.");
-		msgBox.setIcon(QMessageBox::Warning);
-		msgBox.exec();
-	}
-	else {
-		msgBox.setText(QString("File %1 saved.").arg(fileName));
-		msgBox.setIcon(QMessageBox::Information);
-		msgBox.exec();
-	}
-}
 void ImageViewer::on_actionSave_as_triggered()
 {
 	if (!isImgOpened()) {
@@ -386,7 +358,7 @@ void ImageViewer::on_actionClear_triggered()
 		return;
 	}
 	clearImage();
-	objekty.clear();	objekty.squeeze();	ui->comboBox->clear();
+	objekty.clear();	objekty.squeeze();	ui->comboBox->clear();	aktualny = NULL;
 
 }
 void ImageViewer::on_actionSet_background_color_triggered()
@@ -394,6 +366,10 @@ void ImageViewer::on_actionSet_background_color_triggered()
 	QColor backgroundColor = QColorDialog::getColor(Qt::white, this, "Select color of background");
 	if (backgroundColor.isValid()) {
 		setBackgroundColor(backgroundColor);
+		poz = backgroundColor;
+		getCurrentViewerWidget()->resetZbuff(poz);
+		if (objekty.size() != 0)
+			getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 	}
 }
 
@@ -411,7 +387,7 @@ void ImageViewer::on_color_clicked() {
 		QString qss = QString("background-color: %1 ").arg(Color.name());
 		ui->farba->setStyleSheet(qss);
 	}
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 }
 
 void ImageViewer::on_fill_clicked() {
@@ -429,15 +405,12 @@ void ImageViewer::on_fill_clicked() {
 			QString qss = QString("background-color: %1 ").arg(Color.name());
 			ui->farba2->setStyleSheet(qss);
 		}
-		getCurrentViewerWidget()->kresliObjekty(objekty);
+		getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 	}
 }
 
 void ImageViewer::calcTrans() {
 	if (aktualny == NULL) {
-		msgBox.setText(u8"Pre transformáciu objektu najskôr zvo¾te objekt.");
-		msgBox.setIcon(QMessageBox::Information);
-		msgBox.exec();
 		return;
 	}
 	int i;
@@ -446,18 +419,13 @@ void ImageViewer::calcTrans() {
 		poly[i].setX(poly[i].x() + ui->transX->value());
 	}
 	for (i = 0; i < poly.size(); i++) {
-		poly[i].setY(poly[i].y() + ui->transY->value());
+		poly[i].setY(poly[i].y() - ui->transY->value());
 	}
 	aktualny->setBody(poly);
 }
 
-
 void ImageViewer::calcRot() {
 	if (aktualny == NULL) {
-		msgBox.setText(u8"Pre transformáciu objektu najskôr zvo¾te objekt.");
-		msgBox.setIcon(QMessageBox::Information);
-		msgBox.exec();
-		return;
 	}
 	if (aktualny->getTyp() != 3) {
 		QVector<QPointF> poly = aktualny->getBody();
@@ -494,9 +462,6 @@ void ImageViewer::calcRot() {
 void ImageViewer::calcSca() {
 	int i;
 	if (aktualny == NULL) {
-		msgBox.setText(u8"Pre transformáciu objektu najskôr zvo¾te objekt.");
-		msgBox.setIcon(QMessageBox::Information);
-		msgBox.exec();
 		return;
 	}
 	QVector<QPointF> poly = aktualny->getBody();
@@ -508,6 +473,12 @@ void ImageViewer::calcSca() {
 }
 
 void ImageViewer::on_kresli_clicked() {
+	if (aktualny == NULL) {
+		msgBox.setText(u8"Pre transformáciu objektu najskôr zvo¾te objekt.");
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+		return;
+	}
 	calcRot();
 	calcSca();
 	calcTrans();
@@ -515,11 +486,52 @@ void ImageViewer::on_kresli_clicked() {
 	ui->transY->setValue(0);
 	ui->sca_spin->setValue(1.0);
 	ui->rot_spin->setValue(0);
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 }
 
+void ImageViewer::on_Clear_clicked() {
+	int i = ui->comboBox->currentIndex(),j;
+	if (i >= 1) {
+		aktualny = objekty[0];
+		ui->comboBox->removeItem(i);
+		objekty.removeAt(i);
+		getCurrentViewerWidget()->kresliObjekty(objekty, poz);
+		ui->comboBox->clear();
+		for (j = 0; j < objekty.size(); j++) {
+			QString str = "vrstva " + QString::number(j+1);
+			ui->comboBox->addItem(str);
+		}
+		ui->comboBox->setCurrentIndex(0);
+	}
+	else if (i == 0 && objekty.size()==1) {
+		objekty.clear();	objekty.squeeze();
+		aktualny = NULL;
+		ui->comboBox->clear();
+		getCurrentViewerWidget()->resetZbuff(poz);
+		getCurrentViewerWidget()->kresliZbuff();
+	}
+	else if (i == 0 && objekty.size() > 1) {
+		aktualny = objekty[1];
+		ui->comboBox->removeItem(i);
+		objekty.removeAt(i); ui->comboBox->clear();
+		for (j = 0; j < objekty.size(); j++) {
+			QString str = "vrstva " + QString::number(j + 1);
+			ui->comboBox->addItem(str);
+		}
+		ui->comboBox->setCurrentIndex(0);
+		getCurrentViewerWidget()->kresliObjekty(objekty, poz);
+	}
+	else {
+		msgBox.setText(u8"Pre zmazanie objektu najskôr zvo¾te objekt.");
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+		return;
+	}
+}
+
+
 void ImageViewer::on_comboBox_currentIndexChanged(int i) {
-	if (!objekty.isEmpty()) {
+	if (!objekty.isEmpty() && i != -1) {
 		aktualny = objekty[i];
 		QColor Color = aktualny->getFill();
 		QString qss = QString("background-color: %1 ").arg(Color.name());
@@ -560,7 +572,7 @@ void ImageViewer::swapper(int i) {				//swapne smerom dole
 void ImageViewer::on_up_clicked() {
 	int i = ui->comboBox->currentIndex() + 1;
 	swapper(i);
-	getCurrentViewerWidget()->kresliObjekty(objekty); 
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz); 
 	if (objekty.size() > i && objekty.size() >= 2 && i != 0)
 		ui->comboBox->setCurrentIndex(i);
 }
@@ -568,14 +580,14 @@ void ImageViewer::on_up_clicked() {
 void ImageViewer::on_down_clicked() {
 	int i = ui->comboBox->currentIndex();
 	swapper(i);
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 	if (objekty.size() > i && objekty.size() >= 2 && i != 0)
 		ui->comboBox->setCurrentIndex(i-1);
 }
 
 void ImageViewer::on_filled_stateChanged(int i) {
 	aktualny->setVyplnaj(i);
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 }
 
 
@@ -644,7 +656,7 @@ void ImageViewer::on_imp_clicked() {
 		//qDebug() << body.size();
 		body.clear(); body.squeeze();
 	}
-	getCurrentViewerWidget()->kresliObjekty(objekty);
+	getCurrentViewerWidget()->kresliObjekty(objekty, poz);
 }
 
 void ImageViewer::on_exp_clicked() {
@@ -656,13 +668,10 @@ void ImageViewer::on_exp_clicked() {
 	}
 
 	QString folder = settings.value("folder_data_save_path", "").toString();
-
 	ViewerWidget* w = getCurrentViewerWidget();
-
 	QString fileFilter = "Image data (*.txt );;All files (*)";
 	QString fileName = QFileDialog::getSaveFileName(this, "Save data", folder + "/" + w->getName(), fileFilter);
 	if (fileName.isEmpty()) { return; }
-
 
 	int i,j; 
 	QFile file(fileName);
@@ -683,138 +692,38 @@ void ImageViewer::on_exp_clicked() {
 			out << 0 << "\n";
 		else 
 			out << 1 << "\n";
-
 	}
 	msgBox.setText(u8"Export bol úspešný");
 	msgBox.setIcon(QMessageBox::Information);
 	msgBox.exec();
 }
 
-
-/*
-void ImageViewer::on_Clear_clicked() {
-	nakreslene = false;
-	prvybod = false;
-	rotacie.clear();
-	rotacie.squeeze();
-	pts.clear();
-	pts.squeeze();
-	temp.clear();
-	temp.squeeze();
-	ui->polygon->setEnabled(true);
-	ui->comboBox->setEnabled(true);
-	ui->transform->setVisible(false);
-	ui->fill->setVisible(false);
-	if (ui->mode->currentIndex()==0)
-		ui->poly->setVisible(true);
-	else
-		ui->poly->setVisible(false);
-	ui->comboBox->setEnabled(true);
-	ui->mode->setEnabled(true);
-	clearImage();
-	update();
-}
-
-void ImageViewer::on_Clear2_clicked() {
-	nakreslene = false;
-	prvybod = false;
-	rotacie.clear();
-	rotacie.squeeze();
-	//ui->bod->clear();
-	//for (int i=0; i<poly.size();i++)
-		//ui->bod->removeItem(0);
-	poly.clear();
-	poly.squeeze();
-	temp.clear();
-	temp.squeeze();
-	ui->comboBox->setEnabled(true);
-	ui->hermit->setVisible(false);
-	ui->mode->setEnabled(true);
-	ui->transform->setVisible(false);
-	ui->fill->setVisible(false);
-	if (ui->mode->currentIndex() == 0)
-		ui->poly->setVisible(true);
-	else
-		ui->poly->setVisible(false);
-	ui->krivka->setEnabled(true);
-	ui->bod->clear();
-	clearImage();
-	update();
-}
-
-void ImageViewer::on_kresli_clicked() {
-	if (ui->krivka->currentIndex() == 0) {
-		if (poly.size() < 2) {
-			msgBox.setText(u8"Minnimálny poèet bodov je 2. Zadajte ïalšie body.");
-			msgBox.setIcon(QMessageBox::Information);
-			msgBox.exec();
-			return;
-		}
-		else {
-			getCurrentViewerWidget()->kresliKrivku(poly, ui->krivka->currentIndex(), ui->comboBox->currentIndex(),rotacie);
-			ui->hermit->setVisible(true);
-		}
+void ImageViewer::on_save_clicked() {
+	if (!isImgOpened()) {
+		msgBox.setText("No image to save.");
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
+		return;
 	}
-	if (ui->krivka->currentIndex() == 1) {
-		if (poly.size() < 3) {
-			msgBox.setText(u8"Minnimálny poèet bodov je 3. Zadajte ïalšie body.");
-			msgBox.setIcon(QMessageBox::Information);
-			msgBox.exec();
-			return;
-		}
-		else {
-			getCurrentViewerWidget()->kresliKrivku(poly, ui->krivka->currentIndex(), ui->comboBox->currentIndex(),rotacie);
-		}
-	}
-	if (ui->krivka->currentIndex() == 2) {
-		if (poly.size() < 4) {
-			msgBox.setText(u8"Minnimálny poèet bodov je 4. Zadajte ïalšie body.");
-			msgBox.setIcon(QMessageBox::Information);
-			msgBox.exec();
-			return;
-		}
-		else {
-			getCurrentViewerWidget()->kresliKrivku(poly, ui->krivka->currentIndex(), ui->comboBox->currentIndex(),rotacie);
-		}
-	}
-	nakreslene = true;
-	ui->krivka->setEnabled(false);
-	update();
-}
+	QString folder = settings.value("folder_img_save_path", "").toString();
 
-void ImageViewer::on_comboBox_2_currentIndexChanged(int i) {
-	getCurrentViewerWidget()->kresliPolygon(poly, farba, ui->comboBox->currentIndex(), vypln, i);
-}
+	ViewerWidget* w = getCurrentViewerWidget();
 
-void ImageViewer::on_mode_currentIndexChanged(int i) {
-	if (ui->mode->currentIndex() == 0) {
-		ui->transform->setVisible(false);
-		ui->poly->setVisible(true);
-		ui->fill->setVisible(false);
-		ui->krivky->setVisible(false);
-		poly.clear();
-		poly.squeeze();
+	QString fileFilter = "Image data (*.bmp *.gif *.jpg *.jpeg *.png *.pbm *.pgm *.ppm .*xbm .* xpm);;All files (*)";
+	QString fileName = QFileDialog::getSaveFileName(this, "Save image", folder + "/" + w->getName(), fileFilter);
+	if (fileName.isEmpty()) { return; }
+
+	QFileInfo fi(fileName);
+	settings.setValue("folder_img_save_path", fi.absoluteDir().absolutePath());
+
+	if (!saveImage(fileName)) {
+		msgBox.setText("Unable to save image.");
+		msgBox.setIcon(QMessageBox::Warning);
+		msgBox.exec();
 	}
-	if (ui->mode->currentIndex() == 1) {
-		ui->transform->setVisible(false);
-		ui->poly->setVisible(false);
-		ui->fill->setVisible(false);
-		ui->krivky->setVisible(true);
-		ui->hermit->setVisible(false);
-		poly.clear();
-		poly.squeeze();
+	else {
+		msgBox.setText(QString("File %1 saved.").arg(fileName));
+		msgBox.setIcon(QMessageBox::Information);
+		msgBox.exec();
 	}
 }
-
-void ImageViewer::on_bod_currentIndexChanged(int i) {
-	if (!rotacie.isEmpty())
-		ui->uhol->setValue(rotacie[i]);
-}
-
-void ImageViewer::on_uhol_valueChanged(double i) {
-	if (!rotacie.isEmpty()) {
-		rotacie[ui->bod->currentIndex()] = i;
-		clearImage();
-		getCurrentViewerWidget()->kresliKrivku(poly, ui->krivka->currentIndex(), ui->comboBox->currentIndex(), rotacie);
-	}	
-}*/

@@ -54,7 +54,7 @@ private:
 	QVector <QPointF> pts, temp;
 	bool prvybod = false;
 	bool nakreslene = false;
-	QColor farba = Qt::black;
+	QColor farba = Qt::black, poz = Qt::white;
 	QColor vypln = Qt::white;
 	QVector <float> rotacie;
 	QVector<objekt*> objekty;
@@ -88,9 +88,9 @@ private slots:
 	void on_imp_clicked();
 	void on_exp_clicked();
 	void on_save_clicked();
-
-	/*
 	void on_Clear_clicked();
+	/*
+	;
 	void on_Clear2_clicked();
 	void on_kresli_clicked();
 	void on_sym_clicked();
